@@ -1,0 +1,41 @@
+version: "3"
+
+services:
+  reverse-proxy:
+    container_name: "${CONTAINER_PREFIX}-proxy"
+    image: "traefik:${TRAEFIK_VERSION}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.service=api@internal"
+    ports:
+      - 80:80
+      - 443:443
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./traefik/dynamic_conf.yaml:/etc/traefik/dynamic_conf.yaml:ro
+      - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ./certs:/etc/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - "--providers.docker"
+      - "--entrypoints.web.address=:80"
+      - "--api.dashboard=true"
+  http:
+    container_name: "${CONTAINER_PREFIX}-http"
+    build: ./apache
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.http.entrypoints=websecure"
+      - "traefik.http.routers.http.tls=true"
+    restart: unless-stopped
+    volumes:
+      - .:/usr/local/apache2/htdocs/:cached
+      - ./certs/server.crt:/usr/local/apache2/conf/server.crt
+      - ./certs/server.key:/usr/local/apache2/conf/server.key
